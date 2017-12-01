@@ -44,7 +44,6 @@ export class EditPostStatus extends Component {
 		status: PropTypes.string,
 		isPostPrivate: PropTypes.bool,
 		confirmationSidebarStatus: PropTypes.string,
-		setNestedSidebar: PropTypes.func,
 	};
 
 	constructor( props ) {
@@ -152,7 +151,7 @@ export class EditPostStatus extends Component {
 						<Gridicon icon="undo" size={ 18 } /> { translate( 'Revert to draft' ) }
 					</Button>
 				) }
-				{ ! isEnabled( 'post-editor/revisions' ) && (
+				{ ! ( isEnabled( 'post-editor/revisions' ) && postUtils.deviceSupportsRevisions() ) && (
 					<EditorRevisionsLegacyLink
 						adminUrl={ adminUrl }
 						revisionsFromPostObj={ get( this.props, 'post.revisions' ) }

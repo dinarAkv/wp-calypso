@@ -6,7 +6,7 @@ import React, { PureComponent } from 'react';
 import { connect } from 'react-redux';
 import PropTypes from 'prop-types';
 import { localize } from 'i18n-calypso';
-import { get, flow, noop } from 'lodash';
+import { get, flow } from 'lodash';
 
 /**
  * Internal dependencies
@@ -15,7 +15,7 @@ import { getPostRevisionsSelectedRevision, isPostRevisionsDialogVisible } from '
 import { getEditorPostId } from 'state/ui/editor/selectors';
 import { getSelectedSiteId } from 'state/ui/selectors';
 import { recordTracksEvent } from 'state/analytics/actions';
-import { closePostRevisionsDialog } from 'state/posts/revisions/actions';
+import { closePostRevisionsDialog, selectPostRevision } from 'state/posts/revisions/actions';
 import EditorRevisions from 'post-editor/editor-revisions';
 import Dialog from 'components/dialog';
 
@@ -26,7 +26,6 @@ class PostRevisionsDialog extends PureComponent {
 		 * @TODO untangle & reduxify
 		 */
 		loadRevision: PropTypes.func.isRequired,
-		onClose: PropTypes.func,
 
 		// connected to state
 		isVisible: PropTypes.bool.isRequired,
@@ -39,12 +38,9 @@ class PostRevisionsDialog extends PureComponent {
 		translate: PropTypes.func.isRequired,
 	};
 
-	static defaultProps = {
-		onClose: noop,
-	};
-
 	componentWillMount() {
 		this.toggleBodyClass( { isVisible: this.props.isVisible } );
+		this.props.selectPostRevision( null );
 	}
 
 	componentWillUpdate( { isVisible } ) {
@@ -92,14 +88,14 @@ class PostRevisionsDialog extends PureComponent {
 	};
 
 	render() {
-		const { isVisible, onClose } = this.props;
+		const { isVisible, closeDialog } = this.props;
 
 		return (
 			<Dialog
 				buttons={ this.dialogButtons() }
 				className="editor-revisions__dialog"
 				isVisible={ isVisible }
-				onClose={ onClose }
+				onClose={ closeDialog }
 			>
 				<EditorRevisions />
 			</Dialog>
@@ -116,6 +112,6 @@ export default flow(
 			revision: getPostRevisionsSelectedRevision( state ),
 			siteId: getSelectedSiteId( state ),
 		} ),
-		{ recordTracksEvent, closeDialog: closePostRevisionsDialog }
+		{ recordTracksEvent, closeDialog: closePostRevisionsDialog, selectPostRevision }
 	)
 )( PostRevisionsDialog );

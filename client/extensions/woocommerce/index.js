@@ -12,6 +12,7 @@ import { translate } from 'i18n-calypso';
 /**
  * Internal dependencies
  */
+import analytics from 'lib/analytics';
 import App from './app';
 import Dashboard from './app/dashboard';
 import EmptyContent from 'components/empty-content';
@@ -21,6 +22,7 @@ import installActionHandlers from './state/data-layer';
 import Order from './app/order';
 import OrderCreate from './app/order/order-create';
 import Orders from './app/orders';
+import ProductCategories from './app/product-categories';
 import Products from './app/products';
 import ProductCreate from './app/products/product-create';
 import ProductUpdate from './app/products/product-update';
@@ -64,6 +66,12 @@ const getStorePages = () => {
 			configKey: 'woocommerce/extension-products',
 			documentTitle: translate( 'Edit Product' ),
 			path: '/store/product/:site/:product',
+		},
+		{
+			container: ProductCategories,
+			configKey: 'woocommerce/extension-product-categories',
+			documentTitle: translate( 'Product Categories' ),
+			path: '/store/products/categories/:site',
 		},
 		{
 			container: Orders,
@@ -155,16 +163,13 @@ const getStorePages = () => {
 			documentTitle: translate( 'Tax Settings' ),
 			path: '/store/settings/taxes/:site',
 		},
-	];
-
-	if ( config.isEnabled( 'woocommerce/extension-settings-email' ) ) {
-		pages.push( {
+		{
 			container: SettingsEmail,
 			configKey: 'woocommerce/extension-settings-email',
 			documentTitle: translate( 'Email' ),
 			path: '/store/settings/email/:site/:setup?',
-		} );
-	}
+		},
+	];
 
 	return pages;
 };
@@ -174,6 +179,22 @@ function addStorePage( storePage, storeNavigation ) {
 		const component = React.createElement( storePage.container, { params: context.params } );
 		const appProps =
 			( storePage.documentTitle && { documentTitle: storePage.documentTitle } ) || {};
+
+		let analyticsPath = storePage.path;
+		const { filter } = context.params;
+		if ( filter ) {
+			analyticsPath = analyticsPath.replace( ':filter', filter );
+		}
+
+		let analyticsPageTitle = 'Store';
+		if ( storePage.documentTitle ) {
+			analyticsPageTitle += ` > ${ storePage.documentTitle }`;
+		} else {
+			analyticsPageTitle += ' > Dashboard';
+		}
+
+		analytics.pageView.record( analyticsPath, analyticsPageTitle );
+
 		renderWithReduxStore(
 			React.createElement( App, appProps, component ),
 			document.getElementById( 'primary' ),

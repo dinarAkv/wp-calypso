@@ -106,6 +106,7 @@ class PostItem extends React.Component {
 			globalId,
 			isAllSitesModeSelected,
 			translate,
+			multiSelectEnabled,
 		} = this.props;
 
 		const title = post ? post.title : null;
@@ -140,21 +141,24 @@ class PostItem extends React.Component {
 						</div>
 						<h1 className="post-item__title">
 							{ ! externalPostLink && (
-								<a href={ isPlaceholder ? null : postUrl } className="post-item__title-link">
+								<a
+									href={ isPlaceholder || multiSelectEnabled ? null : postUrl }
+									className="post-item__title-link"
+								>
 									{ title || translate( 'Untitled' ) }
 								</a>
 							) }
 							{ ! isPlaceholder &&
-							externalPostLink && (
-								<ExternalLink
-									icon={ true }
-									href={ postUrl }
-									target="_blank"
-									className="post-item__title-link"
-								>
-									{ title || translate( 'Untitled' ) }
-								</ExternalLink>
-							) }
+								externalPostLink && (
+									<ExternalLink
+										icon={ true }
+										href={ multiSelectEnabled ? null : postUrl }
+										target="_blank"
+										className="post-item__title-link"
+									>
+										{ title || translate( 'Untitled' ) }
+									</ExternalLink>
+								) }
 						</h1>
 						<div className="post-item__meta">
 							<PostTime globalId={ globalId } />
@@ -162,7 +166,7 @@ class PostItem extends React.Component {
 						</div>
 					</div>
 					<PostTypeListPostThumbnail globalId={ globalId } />
-					<PostActionsEllipsisMenu globalId={ globalId } />
+					{ ! multiSelectEnabled && <PostActionsEllipsisMenu globalId={ globalId } /> }
 				</div>
 				{ expandedContent }
 			</div>

@@ -4,38 +4,21 @@
  */
 import React from 'react';
 import PropTypes from 'prop-types';
+import { connect } from 'react-redux';
 import { localize } from 'i18n-calypso';
 import Gridicon from 'gridicons';
+import { flow } from 'lodash';
 
 /**
  * Internal dependencies
  */
-import { NESTED_SIDEBAR_NONE, NESTED_SIDEBAR_REVISIONS } from 'state/ui/editor/sidebar/constants';
 import Button from 'components/button';
 import EditorPostType from 'post-editor/editor-post-type';
+import { closeEditorSidebar } from 'state/ui/editor/sidebar/actions';
 
-const EditorSidebarHeader = ( {
-	nestedSidebar = NESTED_SIDEBAR_NONE,
-	closeSidebar,
-	translate,
-} ) => (
+const EditorSidebarHeader = ( { closeSidebar, translate } ) => (
 	<div className="editor-sidebar__header">
-		{ nestedSidebar === NESTED_SIDEBAR_REVISIONS && (
-			<span>
-				<Button
-					borderless
-					className="editor-sidebar__header-title"
-					onClick={ closeSidebar }
-					title={ translate( 'Close sidebar' ) }
-				>
-					<EditorPostType isSettings />
-				</Button>
-				<span>→ { translate( 'Revisions' ) }</span>
-			</span>
-		) }
-
-		{ nestedSidebar === NESTED_SIDEBAR_NONE && <EditorPostType isSettings /> }
-
+		<EditorPostType isSettings />
 		<Button
 			compact
 			borderless
@@ -51,7 +34,11 @@ const EditorSidebarHeader = ( {
 EditorSidebarHeader.propTypes = {
 	translate: PropTypes.func.isRequired,
 	closeSidebar: PropTypes.func,
-	nestedSidebar: PropTypes.oneOf( [ NESTED_SIDEBAR_NONE, NESTED_SIDEBAR_REVISIONS ] ),
 };
 
-export default localize( EditorSidebarHeader );
+export default flow(
+	localize,
+	connect( null, {
+		closeSidebar: closeEditorSidebar,
+	} )
+)( EditorSidebarHeader );

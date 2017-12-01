@@ -3,7 +3,7 @@
  * External dependencies
  */
 import { translate } from 'i18n-calypso';
-import { every, fill, find, first, flatten, includes, isEmpty, isEqual, map, noop, pick, some } from 'lodash';
+import { every, fill, find, first, flatten, includes, isEqual, map, noop, pick } from 'lodash';
 
 /**
  * Internal dependencies
@@ -16,7 +16,7 @@ import { hasNonEmptyLeaves } from 'woocommerce/woocommerce-services/lib/utils/tr
 import normalizeAddress from './normalize-address';
 import getRates from './get-rates';
 import { getPrintURL } from 'woocommerce/woocommerce-services/lib/pdf-label-utils';
-import { getShippingLabel, getFormErrors, shouldFulfillOrder, shouldEmailDetails } from './selectors';
+import { getFirstErroneousStep, getShippingLabel, getFormErrors, shouldFulfillOrder, shouldEmailDetails } from './selectors';
 import { createNote } from 'woocommerce/state/sites/orders/notes/actions';
 import { updateOrder } from 'woocommerce/state/sites/orders/actions';
 import { getAllPackageDefinitions } from 'woocommerce/woocommerce-services/state/packages/selectors';
@@ -68,24 +68,16 @@ import {
 	WOOCOMMERCE_SERVICES_SHIPPING_LABEL_SET_FULFILL_ORDER,
 } from '../action-types.js';
 
-const FORM_STEPS = [ 'origin', 'destination', 'packages', 'rates' ];
-
 export const fetchLabelsData = ( orderId, siteId ) => ( dispatch ) => {
 	dispatch( { type: WOOCOMMERCE_SERVICES_SHIPPING_LABEL_SET_IS_FETCHING, orderId, siteId, isFetching: true } );
 
 	api.get( siteId, api.url.orderLabels( orderId ) )
-		.then( ( { formData, labelsData, paperSize, storeOptions, paymentMethod, numPaymentMethods, enabled } ) => {
+		.then( ( data ) => {
 			dispatch( {
 				type: WOOCOMMERCE_SERVICES_SHIPPING_LABEL_INIT,
 				siteId,
 				orderId,
-				formData,
-				labelsData,
-				paperSize,
-				storeOptions,
-				paymentMethod,
-				numPaymentMethods,
-				enabled,
+				...data,
 			} );
 		} )
 		.catch( ( error ) => {
@@ -110,50 +102,25 @@ const waitForAllPromises = ( promises ) => {
 	return Promise.all( promises.map( ( p ) => p.catch( ( e ) => e ) ) );
 };
 
-const getNextErroneousStep = ( form, errors, currentStep ) => {
-	const firstStepToCheck = FORM_STEPS[ FORM_STEPS.indexOf( currentStep ) + 1 ];
-	switch ( firstStepToCheck ) {
-		case 'origin':
-			if ( ! form.origin.isNormalized || ! isEqual( form.origin.values, form.origin.normalized ) ) {
-				return 'origin';
-			}
-		case 'destination':
-			if ( ! form.destination.isNormalized || ! isEqual( form.destination.values, form.destination.normalized ) ) {
-				return 'destination';
-			}
-		case 'packages':
-			if ( hasNonEmptyLeaves( errors.packages ) ) {
-				return 'packages';
-			}
-		case 'rates':
-			if ( hasNonEmptyLeaves( errors.rates ) ) {
-				return 'rates';
-			}
-	}
-	return null;
-};
-
-const expandFirstErroneousStep = ( orderId, siteId, dispatch, getState, storeOptions, currentStep = null ) => {
-	const shippingLabel = getShippingLabel( getState(), orderId, siteId );
+const expandFirstErroneousStep = ( orderId, siteId, dispatch, getState ) => {
+	const state = getState();
+	const shippingLabel = getShippingLabel( state, orderId, siteId );
 	const form = shippingLabel.form;
 
-	const step = getNextErroneousStep( form, getFormErrors( getState(), orderId, siteId ), currentStep );
+	const step = getFirstErroneousStep( state, orderId, siteId );
 	if ( step && ! form[ step ].expanded ) {
 		dispatch( toggleStep( orderId, siteId, step ) );
 	}
 };
 
 export const submitStep = ( orderId, siteId, stepName ) => ( dispatch, getState ) => {
-	const state = getShippingLabel( getState(), orderId, siteId );
-	const storeOptions = state.storeOptions;
-
 	dispatch( {
 		type: WOOCOMMERCE_SERVICES_SHIPPING_LABEL_TOGGLE_STEP,
 		stepName,
 		siteId,
 		orderId,
 	} );
-	expandFirstErroneousStep( orderId, siteId, dispatch, getState, storeOptions, stepName );
+	expandFirstErroneousStep( orderId, siteId, dispatch, getState );
 };
 
 const convertToApiPackage = ( pckg ) => {
@@ -164,8 +131,24 @@ export const clearAvailableRates = ( orderId, siteId ) => {
 	return { type: WOOCOMMERCE_SERVICES_SHIPPING_LABEL_CLEAR_AVAILABLE_RATES, orderId, siteId };
 };
 
-const getLabelRates = ( orderId, siteId, dispatch, getState, handleResponse ) => {
-	const formState = getShippingLabel( getState(), orderId, siteId ).form;
+/**
+ * Checks the form for errors, and if there are none, fetches the label rates. Otherwise expands the first erroneous step
+ * @param {Number} orderId order ID
+ * @param {Number} siteId site ID
+ * @param {Function} dispatch dispatch function
+ * @param {Function} getState getState functuon
+ *
+ * @returns {Promise} getRates promise
+ */
+const tryGetLabelRates = ( orderId, siteId, dispatch, getState ) => {
+	const state = getState();
+	const erroneousStep = getFirstErroneousStep( state, orderId, siteId );
+	if ( erroneousStep && 'rates' !== erroneousStep ) {
+		expandFirstErroneousStep( orderId, siteId, dispatch, getState );
+		return;
+	}
+
+	const formState = getShippingLabel( state, orderId, siteId ).form;
 	const {
 		origin,
 		destination,
@@ -173,7 +156,7 @@ const getLabelRates = ( orderId, siteId, dispatch, getState, handleResponse ) =>
 	} = formState;
 
 	return getRates( orderId, siteId, dispatch, origin.values, destination.values, map( packages.selected, convertToApiPackage ) )
-		.then( handleResponse )
+		.then( () => expandFirstErroneousStep( orderId, siteId, dispatch, getState ) )
 		.catch( ( error ) => {
 			console.error( error );
 			dispatch( NoticeActions.errorNotice( error.toString() ) );
@@ -185,8 +168,7 @@ export const openPrintingFlow = ( orderId, siteId ) => (
 	getState
 ) => {
 	const state = getShippingLabel( getState(), orderId, siteId );
-	const storeOptions = state.storeOptions;
-	let form = state.form;
+	const form = state.form;
 	const { origin, destination } = form;
 	const errors = getFormErrors( getState(), orderId, siteId );
 	const promisesQueue = [];
@@ -213,33 +195,7 @@ export const openPrintingFlow = ( orderId, siteId ) => (
 		dispatch( toggleStep( orderId, siteId, 'destination' ) );
 	}
 
-	waitForAllPromises( promisesQueue ).then( () => {
-		form = getShippingLabel( getState(), orderId, siteId ).form;
-
-		const expandStepAfterAction = () => {
-			expandFirstErroneousStep( orderId, siteId, dispatch, getState, storeOptions );
-		};
-
-		// If origin and destination are normalized, get rates
-		if (
-			form.origin.isNormalized &&
-			isEqual( form.origin.values, form.origin.normalized ) &&
-			form.destination.isNormalized &&
-			isEqual( form.destination.values, form.destination.normalized ) &&
-			isEmpty( form.rates.available ) &&
-			! hasNonEmptyLeaves( errors.packages )
-		) {
-			return getLabelRates( orderId, siteId, dispatch, getState, expandStepAfterAction );
-		}
-
-		// Otherwise, just expand the next errant step unless the
-		// user already interacted with the form
-		if ( some( FORM_STEPS.map( ( step ) => form[ step ].expanded ) ) ) {
-			return;
-		}
-
-		expandStepAfterAction();
-	} );
+	waitForAllPromises( promisesQueue ).then( () => tryGetLabelRates( orderId, siteId, dispatch, getState ) );
 
 	dispatch( { type: WOOCOMMERCE_SERVICES_SHIPPING_LABEL_OPEN_PRINTING_FLOW, orderId, siteId } );
 };
@@ -294,8 +250,6 @@ export const removeIgnoreValidation = ( orderId, siteId, group ) => {
 };
 
 export const confirmAddressSuggestion = ( orderId, siteId, group ) => ( dispatch, getState, ) => {
-	const storeOptions = getShippingLabel( getState(), orderId, siteId ).storeOptions;
-
 	dispatch( {
 		type: WOOCOMMERCE_SERVICES_SHIPPING_LABEL_CONFIRM_ADDRESS_SUGGESTION,
 		siteId,
@@ -303,30 +257,10 @@ export const confirmAddressSuggestion = ( orderId, siteId, group ) => ( dispatch
 		group,
 	} );
 
-	const expandNextStep = () => {
-		expandFirstErroneousStep( orderId, siteId, dispatch, getState, storeOptions, group );
-	};
-
-	const state = getState();
-
-	const errors = getFormErrors( state, orderId, siteId );
-
-	// If all prerequisite steps are error free, fetch new rates, otherwise expand the erroneous step
-	if (
-		hasNonEmptyLeaves( errors.origin ) ||
-		hasNonEmptyLeaves( errors.destination ) ||
-		hasNonEmptyLeaves( errors.packages )
-	) {
-		expandNextStep();
-		return;
-	}
-
-	getLabelRates( orderId, siteId, dispatch, getState, expandNextStep );
+	tryGetLabelRates( orderId, siteId, dispatch, getState );
 };
 
 export const submitAddressForNormalization = ( orderId, siteId, group ) => ( dispatch, getState ) => {
-	const shippingLabel = getShippingLabel( getState(), orderId, siteId );
-	const storeOptions = shippingLabel.storeOptions;
 	const handleNormalizeResponse = ( success ) => {
 		if ( ! success ) {
 			return;
@@ -338,23 +272,7 @@ export const submitAddressForNormalization = ( orderId, siteId, group ) => ( dis
 				dispatch( toggleStep( orderId, siteId, group ) );
 			}
 
-			const expandNextStep = () => {
-				expandFirstErroneousStep( orderId, siteId, dispatch, getState, storeOptions, group );
-			};
-
-			const errors = getFormErrors( getState(), orderId, siteId );
-
-			// If all prerequisite steps are error free, fetch new rates, otherwise expand the erroneous step
-			if (
-				hasNonEmptyLeaves( errors.origin ) ||
-				hasNonEmptyLeaves( errors.destination ) ||
-				hasNonEmptyLeaves( errors.packages )
-			) {
-				expandNextStep();
-				return;
-			}
-
-			getLabelRates( orderId, siteId, dispatch, getState, expandNextStep );
+			tryGetLabelRates( orderId, siteId, dispatch, getState );
 		}
 	};
 
@@ -521,15 +439,9 @@ export const removeItem = ( orderId, siteId, packageId, itemIndex ) => ( dispatc
 };
 
 export const confirmPackages = ( orderId, siteId ) => ( dispatch, getState ) => {
-	const storeOptions = getShippingLabel( getState(), orderId, siteId ).storeOptions;
 	dispatch( toggleStep( orderId, siteId, 'packages' ) );
 	dispatch( savePackages( orderId, siteId ) );
-
-	const handleResponse = () => {
-		expandFirstErroneousStep( orderId, siteId, dispatch, getState, storeOptions, 'packages' );
-	};
-
-	getLabelRates( orderId, siteId, dispatch, getState, handleResponse );
+	tryGetLabelRates( orderId, siteId, dispatch, getState );
 };
 
 export const updateRate = ( orderId, siteId, packageId, value ) => {
@@ -569,7 +481,7 @@ const handleLabelPurchaseError = ( orderId, siteId, dispatch, getState, error ) 
 	dispatch( NoticeActions.errorNotice( error.toString() ) );
 	//re-request the rates on failure to avoid attempting repurchase of the same shipment id
 	dispatch( clearAvailableRates( orderId, siteId ) );
-	getLabelRates( orderId, siteId, dispatch, getState, noop );
+	tryGetLabelRates( orderId, siteId, dispatch, getState, noop );
 };
 
 const getPDFFileName = ( orderId, isReprint = false ) => {
@@ -610,34 +522,6 @@ const pollForLabelsPurchase = ( orderId, siteId, dispatch, getState, labels ) =>
 
 	dispatch( purchaseLabelResponse( orderId, siteId, labels, false ) );
 
-	if ( shouldFulfillOrder( getState(), orderId, siteId ) ) {
-		dispatch( updateOrder( siteId, {
-			id: orderId,
-			status: 'completed',
-		} ) );
-	}
-
-	if ( shouldEmailDetails( getState(), orderId, siteId ) ) {
-		const trackingNumbers = labels.map( ( label ) => label.tracking );
-		const carrierId = first( labels ).carrier_id;
-		const carrierName = 'usps' === carrierId ? translate( 'USPS' ) : translate( 'an unknown carrier' );
-
-		const note = {
-			note: translate(
-				'Your order consisting of %(packageNum)d package has been shipped with %(carrierName)s. ' +
-					'The tracking number is %(trackingNumbers)s.',
-				'Your order consisting of %(packageNum)d packages has been shipped with %(carrierName)s. ' +
-					'The tracking numbers are %(trackingNumbers)s.',
-				{
-					args: { packageNum: trackingNumbers.length, carrierName, trackingNumbers: trackingNumbers.join( ', ' ) },
-					count: trackingNumbers.length,
-				}
-			),
-			customer_note: true,
-		};
-		dispatch( createNote( siteId, orderId, note ) );
-	}
-
 	const labelsToPrint = labels.map( ( label, index ) => ( {
 		caption: translate( 'PACKAGE %(num)d (OF %(total)d)', {
 			args: {
@@ -649,6 +533,7 @@ const pollForLabelsPurchase = ( orderId, siteId, dispatch, getState, labels ) =>
 	} ) );
 	const state = getShippingLabel( getState(), orderId, siteId );
 	const printUrl = getPrintURL( siteId, state.paperSize, labelsToPrint );
+	let hasError = false;
 
 	api.get( siteId, printUrl )
 		.then( ( fileData ) => {
@@ -670,10 +555,47 @@ const pollForLabelsPurchase = ( orderId, siteId, dispatch, getState, labels ) =>
 					.catch( ( err ) => {
 						console.error( err );
 						dispatch( NoticeActions.errorNotice( err.toString() ) );
+						hasError = true;
 					} )
 					.then( () => {
 						dispatch( exitPrintingFlow( orderId, siteId, true ) );
 						dispatch( clearAvailableRates( orderId, siteId ) );
+
+						if ( hasError ) {
+							return;
+						}
+
+						if ( shouldEmailDetails( getState(), orderId, siteId ) ) {
+							const trackingNumbers = labels.map( ( label ) => label.tracking );
+							const carrierId = first( labels ).carrier_id;
+							const carrierName = 'usps' === carrierId ? translate( 'USPS' ) : translate( 'an unknown carrier' );
+
+							const note = {
+								note: translate(
+									'Your order consisting of %(packageNum)d package has been shipped with %(carrierName)s. ' +
+										'The tracking number is %(trackingNumbers)s.',
+									'Your order consisting of %(packageNum)d packages has been shipped with %(carrierName)s. ' +
+										'The tracking numbers are %(trackingNumbers)s.',
+									{
+										args: {
+											packageNum: trackingNumbers.length,
+											carrierName,
+											trackingNumbers: trackingNumbers.join( ', ' ),
+										},
+										count: trackingNumbers.length,
+									}
+								),
+								customer_note: true,
+							};
+							dispatch( createNote( siteId, orderId, note ) );
+						}
+
+						if ( shouldFulfillOrder( getState(), orderId, siteId ) ) {
+							dispatch( updateOrder( siteId, {
+								id: orderId,
+								status: 'completed',
+							} ) );
+						}
 					} );
 			}
 		} );

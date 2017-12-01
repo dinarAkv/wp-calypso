@@ -8,10 +8,11 @@ import {
 	recordGoogleEvent,
 	withAnalytics,
 } from 'state/analytics/actions';
-import { EDITOR_NESTED_SIDEBAR_SET } from 'state/action-types';
+import { savePreference } from 'state/preferences/actions';
 import { setLayoutFocus } from 'state/ui/layout-focus/actions';
 
-export const openEditorSidebar = () => dispatch =>
+export const openEditorSidebar = () => dispatch => {
+	dispatch( savePreference( 'editor-sidebar', 'open' ) );
 	dispatch(
 		withAnalytics(
 			composeAnalytics(
@@ -21,8 +22,10 @@ export const openEditorSidebar = () => dispatch =>
 			setLayoutFocus( 'sidebar' )
 		)
 	);
+};
 
-export const closeEditorSidebar = () => dispatch =>
+export const closeEditorSidebar = () => dispatch => {
+	dispatch( savePreference( 'editor-sidebar', 'closed' ) );
 	dispatch(
 		withAnalytics(
 			composeAnalytics(
@@ -32,8 +35,4 @@ export const closeEditorSidebar = () => dispatch =>
 			setLayoutFocus( 'content' )
 		)
 	);
-
-export const setNestedSidebar = target => ( {
-	type: EDITOR_NESTED_SIDEBAR_SET,
-	target,
-} );
+};

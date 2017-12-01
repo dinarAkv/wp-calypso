@@ -29,6 +29,7 @@ import BulkSelect from 'components/bulk-select/docs/example';
 import ButtonGroups from 'components/button-group/docs/example';
 import Buttons from 'components/button/docs/example';
 import Cards from 'components/card/docs/example';
+import Checklist from 'components/checklist/docs/example';
 import ClipboardButtonInput from 'components/clipboard-button-input/docs/example';
 import ClipboardButtons from 'components/forms/clipboard-button/docs/example';
 import Collection from 'devdocs/design/search-collection';
@@ -74,6 +75,7 @@ import SectionHeader from 'components/section-header/docs/example';
 import SectionNav from 'components/section-nav/docs/example';
 import SegmentedControl from 'components/segmented-control/docs/example';
 import SelectDropdown from 'components/select-dropdown/docs/example';
+import ShareButton from 'components/share-button/docs/example';
 import SocialLogos from 'social-logos/example';
 import Spinner from 'components/spinner/docs/example';
 import SpinnerButton from 'components/spinner-button/docs/example';
@@ -134,6 +136,7 @@ class DesignAssets extends React.Component {
 					<ButtonGroups />
 					<Buttons componentUsageStats={ componentsUsageStats.button } />
 					<Cards />
+					<Checklist />
 					<ClipboardButtonInput />
 					<ClipboardButtons />
 					<Count />
@@ -178,6 +181,7 @@ class DesignAssets extends React.Component {
 					<SectionNav />
 					<SegmentedControl />
 					<SelectDropdown searchKeywords="menu" />
+					<ShareButton />
 					<SocialLogos />
 					<Spinner searchKeywords="loading" />
 					<SpinnerButton searchKeywords="loading input submit" />

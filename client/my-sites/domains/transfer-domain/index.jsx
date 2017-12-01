@@ -7,14 +7,12 @@ import page from 'page';
 import PropTypes from 'prop-types';
 import React, { Component } from 'react';
 import { connect } from 'react-redux';
-import { localize } from 'i18n-calypso';
 
 /**
  * Internal dependencies
  */
-import HeaderCake from 'components/header-cake';
 import TransferDomainStep from 'components/domains/transfer-domain-step';
-import { DOMAINS_WITH_PLANS_ONLY } from 'state/current-user/constants';
+import { DOMAINS_WITH_PLANS_ONLY, TRANSFER_IN } from 'state/current-user/constants';
 import { cartItems } from 'lib/cart-values';
 import upgradesActions from 'lib/upgrades/actions';
 import Notice from 'components/notice';
@@ -35,7 +33,6 @@ export class TransferDomain extends Component {
 		selectedSite: PropTypes.object,
 		selectedSiteId: PropTypes.number,
 		selectedSiteSlug: PropTypes.string,
-		translate: PropTypes.func.isRequired,
 	};
 
 	state = {
@@ -66,26 +63,34 @@ export class TransferDomain extends Component {
 		page( '/checkout/' + selectedSiteSlug );
 	};
 
-	handleTransferDomain = ( domain, nameservers, privacy, dnsImport ) => {
+	handleTransferDomain = domain => {
 		const { selectedSiteSlug } = this.props;
 
 		this.setState( { errorMessage: null } );
 
-		upgradesActions.addItem(
+		const transferItems = [];
+
+		transferItems.push(
 			cartItems.domainTransfer( {
 				domain,
-				extra: {
-					nameservers,
-					privacy,
-					dnsImport,
-				},
 			} )
 		);
+
+		transferItems.push(
+			cartItems.domainTransferPrivacy( {
+				domain,
+			} )
+		);
+
+		upgradesActions.addItems( transferItems );
 
 		page( '/checkout/' + selectedSiteSlug );
 	};
 
 	componentWillMount() {
+		if ( ! this.props.transferInAllowed ) {
+			page.redirect( '/domains/add/mapping/' + this.props.selectedSiteSlug );
+		}
 		this.checkSiteIsUpgradeable( this.props );
 	}
 
@@ -106,23 +111,25 @@ export class TransferDomain extends Component {
 			initialQuery,
 			productsList,
 			selectedSite,
-			translate,
+			transferInAllowed,
 		} = this.props;
 
 		const { errorMessage } = this.state;
 
+		if ( ! transferInAllowed ) {
+			return null;
+		}
+
 		return (
 			<span>
 				<QueryProductsList />
-
-				<HeaderCake onClick={ this.goBack }>{ translate( 'Use My Own Domain' ) }</HeaderCake>
-
 				{ errorMessage && <Notice status="is-error" text={ errorMessage } /> }
 
 				<TransferDomainStep
 					basePath={ this.props.basePath }
 					cart={ cart }
 					domainsWithPlansOnly={ domainsWithPlansOnly }
+					goBack={ this.goBack }
 					initialQuery={ initialQuery }
 					products={ productsList }
 					selectedSite={ selectedSite }
@@ -142,4 +149,5 @@ export default connect( state => ( {
 	domainsWithPlansOnly: currentUserHasFlag( state, DOMAINS_WITH_PLANS_ONLY ),
 	isSiteUpgradeable: isSiteUpgradeable( state, getSelectedSiteId( state ) ),
 	productsList: getProductsList( state ),
-} ) )( localize( TransferDomain ) );
+	transferInAllowed: currentUserHasFlag( state, TRANSFER_IN ),
+} ) )( TransferDomain );

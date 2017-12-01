@@ -32,13 +32,14 @@ import { composeAnalytics, recordGoogleEvent, recordTracksEvent } from 'state/an
 import { getSelectedSite } from 'state/ui/selectors';
 import FormTextInputWithAffixes from 'components/forms/form-text-input-with-affixes';
 import TransferDomainPrecheck from './transfer-domain-precheck';
-import TransferDomainOptions from './transfer-domain-options';
 import support from 'lib/url/support';
+import HeaderCake from 'components/header-cake';
 
 class TransferDomainStep extends React.Component {
 	static propTypes = {
 		products: PropTypes.object.isRequired,
 		cart: PropTypes.object,
+		goBack: PropTypes.func,
 		selectedSite: PropTypes.oneOfType( [ PropTypes.object, PropTypes.bool ] ),
 		initialQuery: PropTypes.string,
 		analyticsSection: PropTypes.string.isRequired,
@@ -59,7 +60,6 @@ class TransferDomainStep extends React.Component {
 		return {
 			searchQuery: this.props.initialQuery || '',
 			domain: null,
-			optionPicker: false,
 		};
 	}
 
@@ -115,6 +115,7 @@ class TransferDomainStep extends React.Component {
 			? this.props.products.domain_map.cost_display
 			: null;
 		const { translate } = this.props;
+		const { searchQuery } = this.state;
 
 		return (
 			<div>
@@ -129,7 +130,9 @@ class TransferDomainStep extends React.Component {
 								'Transfer your domain from your current provider to WordPress.com so ' +
 									'you can manage your domain and site in the same place. {{a}}Learn More{{/a}}',
 								{
-									components: { a: <a href="#" /> },
+									components: {
+										a: <a href={ support.INCOMING_DOMAIN_TRANSFER } rel="noopener noreferrer" />,
+									},
 								}
 							) }
 						</div>
@@ -139,7 +142,7 @@ class TransferDomainStep extends React.Component {
 						<FormTextInputWithAffixes
 							prefix="http://"
 							type="text"
-							value={ this.state.searchQuery }
+							value={ searchQuery }
 							placeholder={ translate( 'example.com' ) }
 							onBlur={ this.save }
 							onChange={ this.setSearchQuery }
@@ -148,7 +151,7 @@ class TransferDomainStep extends React.Component {
 						/>
 					</div>
 					<button
-						disabled={ this.state.searchQuery.length === 0 }
+						disabled={ ! getTld( searchQuery ) }
 						className="transfer-domain-step__go button is-primary"
 						onClick={ this.recordGoButtonClick }
 					>
@@ -182,35 +185,40 @@ class TransferDomainStep extends React.Component {
 	}
 
 	transferDomainPrecheck() {
-		return <TransferDomainPrecheck domain={ this.state.domain } setValid={ this.precheckOk } />;
-	}
-
-	precheckOk = () => {
-		this.setState( { optionPicker: true } );
-	};
-
-	transferDomainOptions() {
 		return (
-			<TransferDomainOptions
+			<TransferDomainPrecheck
 				domain={ this.state.domain }
-				onSubmit={ this.props.onTransferDomain }
+				setValid={ this.props.onTransferDomain }
 			/>
 		);
 	}
 
+	goBack = () => {
+		if ( this.state.domain ) {
+			this.setState( { domain: null } );
+		} else {
+			this.props.goBack();
+		}
+	};
+
 	render() {
 		let content;
-		const { domain, optionPicker } = this.state;
+		const { domain } = this.state;
 
-		if ( domain && ! optionPicker ) {
+		if ( domain ) {
 			content = this.transferDomainPrecheck();
-		} else if ( domain && optionPicker ) {
-			content = this.transferDomainOptions();
 		} else {
 			content = this.addTransfer();
 		}
 
-		return <div className="transfer-domain-step">{ content }</div>;
+		return (
+			<div className="transfer-domain-step">
+				<HeaderCake onClick={ this.goBack }>
+					{ this.props.translate( 'Use My Own Domain' ) }
+				</HeaderCake>
+				<div>{ content }</div>
+			</div>
+		);
 	}
 
 	domainRegistrationUpsell() {

@@ -7,7 +7,7 @@ import PropTypes from 'prop-types';
 import { connect } from 'react-redux';
 import { localize } from 'i18n-calypso';
 import Gridicon from 'gridicons';
-import { get } from 'lodash';
+import { get, isEqual } from 'lodash';
 
 /**
  * Internal dependencies
@@ -28,6 +28,8 @@ export class CommentAuthor extends Component {
 		isBulkMode: PropTypes.bool,
 		isPostView: PropTypes.bool,
 	};
+
+	shouldComponentUpdate = nextProps => ! isEqual( this.props, nextProps );
 
 	commentHasLink = () => {
 		if ( typeof DOMParser !== 'undefined' && DOMParser.prototype.parseFromString ) {
@@ -88,11 +90,15 @@ export class CommentAuthor extends Component {
 					<div className="comment__author-info-element">
 						<span className="comment__date">
 							{ isEnabled( 'comments/management/comment-view' ) ? (
-								<a href={ commentUrl } title={ formattedDate }>
+								<a href={ commentUrl } tabIndex={ isBulkMode ? -1 : 0 } title={ formattedDate }>
 									{ relativeDate }
 								</a>
 							) : (
-								<ExternalLink href={ commentUrl } title={ formattedDate }>
+								<ExternalLink
+									href={ commentUrl }
+									tabIndex={ isBulkMode ? -1 : 0 }
+									title={ formattedDate }
+								>
 									{ relativeDate }
 								</ExternalLink>
 							) }
@@ -100,7 +106,7 @@ export class CommentAuthor extends Component {
 						{ authorUrl && (
 							<span className="comment__author-url">
 								<span className="comment__author-url-separator">&middot;</span>
-								<ExternalLink href={ authorUrl }>
+								<ExternalLink href={ authorUrl } tabIndex={ isBulkMode ? -1 : 0 }>
 									<Emojify>{ urlToDomainAndPath( authorUrl ) }</Emojify>
 								</ExternalLink>
 							</span>

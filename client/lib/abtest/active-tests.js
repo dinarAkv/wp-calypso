@@ -9,22 +9,15 @@ export default {
 		},
 		defaultVariation: 'singlePurchaseFlow',
 	},
-	signupSurveyStep: {
-		datestamp: '20170329',
-		variations: {
-			showSurveyStep: 20,
-			hideSurveyStep: 80,
-		},
-		defaultVariation: 'hideSurveyStep',
-	},
 	signupAtomicStoreVsPressable: {
 		datestamp: '20171101',
 		variations: {
-			atomic: 10,
-			pressable: 90,
+			atomic: 99,
+			pressable: 1,
 		},
-		defaultVariation: 'pressable',
+		defaultVariation: 'atomic',
 		allowExistingUsers: true,
+		localeTargets: 'any',
 	},
 	businessPlanDescriptionAT: {
 		datestamp: '20170605',
@@ -70,8 +63,8 @@ export default {
 		defaultVariation: 'hide',
 		allowExistingUsers: true,
 	},
-	jetpackHidePlanIconsOnMobile: {
-		datestamp: '20171031',
+	jetpackHidePlanIconsForAllDevices: {
+		datestamp: '20171122',
 		variations: {
 			show: 50,
 			hide: 50,

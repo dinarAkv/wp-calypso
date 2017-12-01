@@ -128,10 +128,6 @@
 		justify-content: space-between;
 	}
 
-	.button {
-		margin-top: 20px;
-	}
-
 	&.is-expanded {
 		align-items: flex-start;
 
@@ -154,11 +150,24 @@
 	}
 }
 
+.transfer-domain-step__section-action {
+	align-items: center;
+	display: flex;
+	margin-top: 20px;
+}
+
 .transfer-domain-step__lock-status {
 	font-size: 12px;
+	display: flex;
+	align-items: center;
+	margin-left: 10px;
 
-	svg {
-		padding-right: 4px;
+	.gridicon {
+		margin-right: 2px;
+	}
+
+	&.transfer-domain-step__checking {
+		color: $gray;
 	}
 
 	&.transfer-domain-step__unlocked {
@@ -168,6 +177,18 @@
 	&.transfer-domain-step__locked {
 		color: $alert-red;
 	}
+
+	&.transfer-domain-step__refresh {
+		color: $blue-wordpress;
+		cursor: pointer;
+	}
+}
+
+.transfer-domain-step__admin-email {
+	hyphens: auto;
+	overflow-wrap: break-word;
+	word-break: break-word;
+	word-wrap: break-word;
 }
 
 .transfer-domain-step__continue-text {
@@ -181,10 +202,21 @@
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
+	flex-direction: column;
 
 	button {
 		flex-shrink: 0;
-		margin-left: 15px;
+		margin-top: 15px;
+		width: 100%;
+	}
+
+	@include breakpoint( '>660px' ) {
+		flex-direction: row;
+
+		button {
+			margin: 0 0 0 15px;
+			width: auto;
+		}
 	}
 }
 

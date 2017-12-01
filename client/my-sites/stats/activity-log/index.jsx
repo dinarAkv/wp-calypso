@@ -16,9 +16,9 @@ import { first, get, groupBy, includes, isEmpty, isNull, last, range } from 'lod
  */
 import ActivityLogBanner from '../activity-log-banner';
 import ActivityLogConfirmDialog from '../activity-log-confirm-dialog';
+import ActivityLogCredentialsNotice from '../activity-log-credentials-notice';
 import ActivityLogDay from '../activity-log-day';
 import ActivityLogDayPlaceholder from '../activity-log-day/placeholder';
-import ActivityLogRewindToggle from './activity-log-rewind-toggle';
 import DatePicker from 'my-sites/stats/stats-date-picker';
 import EmptyContent from 'components/empty-content';
 import ErrorBanner from '../activity-log-banner/error-banner';
@@ -26,14 +26,17 @@ import JetpackColophon from 'components/jetpack-colophon';
 import Main from 'components/main';
 import ProgressBanner from '../activity-log-banner/progress-banner';
 import QueryActivityLog from 'components/data/query-activity-log';
+import QueryJetpackCredentials from 'components/data/query-jetpack-credentials';
 import QueryRewindStatus from 'components/data/query-rewind-status';
 import QuerySiteSettings from 'components/data/query-site-settings'; // For site time offset
+import QueryRewindBackupStatus from 'components/data/query-rewind-backup-status';
 import SidebarNavigation from 'my-sites/sidebar-navigation';
 import StatsFirstView from '../stats-first-view';
 import StatsNavigation from 'blocks/stats-navigation';
 import StatsPeriodNavigation from 'my-sites/stats/stats-period-navigation';
 import SuccessBanner from '../activity-log-banner/success-banner';
 import { adjustMoment, getActivityLogQuery, getStartMoment } from './utils';
+import { activityLogRequest } from 'state/activity-log/actions';
 import { getSelectedSiteId } from 'state/ui/selectors';
 import { getSiteSlug, getSiteTitle } from 'state/sites/selectors';
 import { recordTracksEvent, withAnalytics } from 'state/analytics/actions';
@@ -49,6 +52,7 @@ import {
 	canCurrentUser,
 	getActivityLog,
 	getActivityLogs,
+	getRequest,
 	getRequestedRewind,
 	getRestoreProgress,
 	getRewindStatusError,
@@ -58,6 +62,7 @@ import {
 	isRewindActive as isRewindActiveSelector,
 	getRequestedBackup,
 	getBackupProgress,
+	hasMainCredentials,
 } from 'state/selectors';
 
 /**
@@ -346,11 +351,16 @@ class ActivityLog extends Component {
 		}
 
 		if ( !! backupProgress ) {
-			cards.push(
-				isEmpty( backupProgress.url )
-					? this.getProgressBanner( siteId, backupProgress, 'backup' )
-					: this.getEndBanner( siteId, backupProgress )
-			);
+			if ( 0 <= backupProgress.progress ) {
+				cards.push( this.getProgressBanner( siteId, backupProgress, 'backup' ) );
+			} else if (
+				! isEmpty( backupProgress.url ) &&
+				Date.now() < Date.parse( backupProgress.validUntil )
+			) {
+				cards.push( this.getEndBanner( siteId, backupProgress ) );
+			} else if ( ! isEmpty( backupProgress.backupError ) ) {
+				cards.push( this.getEndBanner( siteId, backupProgress ) );
+			}
 		}
 
 		return cards;
@@ -389,6 +399,7 @@ class ActivityLog extends Component {
 	getEndBanner( siteId, progress ) {
 		const {
 			errorCode,
+			backupError,
 			failureReason,
 			siteTitle,
 			timestamp,
@@ -396,16 +407,23 @@ class ActivityLog extends Component {
 			downloadCount,
 			restoreId,
 			downloadId,
+			rewindId,
 		} = progress;
+		const { requestedRestoreActivityId } = this.props;
 		return (
 			<div key={ `end-banner-${ restoreId || downloadId }` }>
 				<QueryActivityLog siteId={ siteId } />
-				{ errorCode ? (
+				{ errorCode || backupError ? (
 					<ErrorBanner
 						key={ `error-${ restoreId || downloadId }` }
-						errorCode={ errorCode }
+						errorCode={ errorCode || backupError }
+						downloadId={ downloadId }
+						rewindId={ rewindId }
+						requestedRestoreActivityId={ requestedRestoreActivityId }
 						failureReason={ failureReason }
-						requestDialog={ this.handleRequestDialog }
+						createBackup={ this.props.createBackup }
+						rewindRestore={ this.props.rewindRestore }
+						closeDialog={ this.handleCloseDialog }
 						siteId={ siteId }
 						siteTitle={ siteTitle }
 						timestamp={ timestamp }
@@ -416,6 +434,7 @@ class ActivityLog extends Component {
 						applySiteOffset={ this.applySiteOffset }
 						siteId={ siteId }
 						timestamp={ timestamp }
+						downloadId={ downloadId }
 						backupUrl={ url }
 						downloadCount={ downloadCount }
 					/>
@@ -429,19 +448,9 @@ class ActivityLog extends Component {
 			return null;
 		}
 
-		const { isPressable, rewindStatusError, translate } = this.props;
+		const { isRewindActive, rewindStatusError, translate } = this.props;
 
-		// Do not match null
-		// FIXME: This is for internal testing
-		if ( false === isPressable ) {
-			return (
-				<ActivityLogBanner status="info" icon={ null }>
-					{ translate( 'Rewind is currently only available for Pressable sites' ) }
-				</ActivityLogBanner>
-			);
-		}
-
-		if ( rewindStatusError ) {
+		if ( isRewindActive && rewindStatusError ) {
 			return (
 				<ActivityLogBanner status="error" icon={ null }>
 					{ translate( 'Rewind error: %s', { args: rewindStatusError.message } ) }
@@ -481,20 +490,20 @@ class ActivityLog extends Component {
 	render() {
 		const {
 			canViewActivityLog,
-			gmtOffset,
 			hasFirstBackup,
+			hasMainCredentials, // eslint-disable-line no-shadow
 			isPressable,
 			isRewindActive,
+			logRequestQuery,
 			logs,
 			moment,
+			requestData,
 			requestedRestoreActivity,
 			requestedRestoreActivityId,
 			requestedBackup,
 			requestedBackupId,
 			siteId,
 			slug,
-			startDate,
-			timezone,
 			translate,
 		} = this.props;
 
@@ -514,7 +523,7 @@ class ActivityLog extends Component {
 			[ 'queued', 'running' ],
 			get( this.props, [ 'restoreProgress', 'status' ] )
 		);
-		const disableBackup = 0 < get( this.props, [ 'backupProgress', 'percent' ], 0 );
+		const disableBackup = 0 <= get( this.props, [ 'backupProgress', 'progress' ], -Infinity );
 
 		const restoreConfirmDialog = requestedRestoreActivity && (
 			<ActivityLogConfirmDialog
@@ -586,26 +595,25 @@ class ActivityLog extends Component {
 		return (
 			<Main wideLayout>
 				{ rewindEnabledByConfig && <QueryRewindStatus siteId={ siteId } /> }
-				<QueryActivityLog
-					siteId={ siteId }
-					{ ...getActivityLogQuery( { gmtOffset, startDate, timezone } ) }
-				/>
+				<QueryActivityLog siteId={ siteId } { ...logRequestQuery } />
+				{ siteId && isRewindActive && <QueryRewindBackupStatus siteId={ siteId } /> }
 				<QuerySiteSettings siteId={ siteId } />
+				{ isRewindActive && <QueryJetpackCredentials siteId={ siteId } /> }
 				<StatsFirstView />
 				<SidebarNavigation />
 				<StatsNavigation selectedItem={ 'activity' } siteId={ siteId } slug={ slug } />
+				{ isRewindActive && ! hasMainCredentials && <ActivityLogCredentialsNotice /> }
 				{ this.renderErrorMessage() }
 				{ hasFirstBackup && this.renderMonthNavigation() }
 				{ this.renderActionProgress() }
-				{ ! isRewindActive && !! isPressable && <ActivityLogRewindToggle siteId={ siteId } /> }
-				{ isNull( logs ) && (
+				{ ! requestData.logs.hasLoaded && (
 					<section className="activity-log__wrapper">
 						<ActivityLogDayPlaceholder />
 						<ActivityLogDayPlaceholder />
 						<ActivityLogDayPlaceholder />
 					</section>
 				) }
-				{ ! isNull( logs ) &&
+				{ requestData.logs.hasLoaded &&
 					isEmpty( logs ) && (
 						<EmptyContent
 							title={ translate( 'No activity for %s', {
@@ -694,12 +702,15 @@ export default connect(
 		const timezone = getSiteTimezoneValue( state, siteId );
 		const requestedRestoreActivityId = getRequestedRewind( state, siteId );
 		const requestedBackupId = getRequestedBackup( state, siteId );
+		const logRequestQuery = getActivityLogQuery( { gmtOffset, startDate, timezone } );
 
 		return {
 			canViewActivityLog: canCurrentUser( state, siteId, 'manage_options' ),
 			gmtOffset,
 			hasFirstBackup: ! isEmpty( getRewindStartDate( state, siteId ) ),
+			hasMainCredentials: hasMainCredentials( state, siteId ),
 			isRewindActive: isRewindActiveSelector( state, siteId ),
+			logRequestQuery,
 			logs: getActivityLogs(
 				state,
 				siteId,
@@ -711,6 +722,7 @@ export default connect(
 			requestedBackupId,
 			restoreProgress: getRestoreProgress( state, siteId ),
 			backupProgress: getBackupProgress( state, siteId ),
+			requestData: { logs: getRequest( state, activityLogRequest( siteId, logRequestQuery ) ) },
 			rewindStatusError: getRewindStatusError( state, siteId ),
 			siteId,
 			siteTitle: getSiteTitle( state, siteId ),

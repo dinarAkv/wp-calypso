@@ -34,6 +34,7 @@ import {
 	isDomainProduct,
 	isDomainRedemption,
 	isDomainRegistration,
+	isDomainTransfer,
 	isFreeTrial,
 	isFreeWordPressComDomain,
 	isGoogleApps,
@@ -345,7 +346,7 @@ export function hasRenewalItem( cart ) {
  * @returns {boolean} true if there is at least one domain transfer item, false otherwise
  */
 export function hasTransferProduct( cart ) {
-	return some( getAll( cart ), isTransfer );
+	return some( getAll( cart ), isDomainTransfer );
 }
 
 /**
@@ -527,6 +528,16 @@ export function domainTransfer( properties ) {
 			...( properties.extra ? { extra: properties.extra } : {} ),
 		}
 	);
+}
+
+/**
+ * Creates a new shopping cart item for an incoming domain transfer privacy.
+ *
+ * @param {Object} properties - list of properties
+ * @returns {Object} the new item as `CartItemValue` object
+ */
+export function domainTransferPrivacy( properties ) {
+	return domainItem( domainProductSlugs.TRANSFER_IN_PRIVACY, properties.domain, properties.source );
 }
 
 /**
@@ -780,6 +791,22 @@ export function getDomainRegistrationsWithoutPrivacy( cart ) {
 }
 
 /**
+ * Retrieves the domain incoming transfer items in the specified shopping cart that do not have corresponding
+ * private incoming transfer item.
+ *
+ * @param {Object} cart - cart as `CartValue` object
+ * @returns {Object[]} the list of the corresponding items in the shopping cart as `CartItemValue` objects
+ */
+export function getDomainTransfersWithoutPrivacy( cart ) {
+	return getDomainTransfers( cart ).filter( function( cartItem ) {
+		return ! some( cart.products, {
+			meta: cartItem.meta,
+			product_slug: domainProductSlugs.TRANSFER_IN_PRIVACY,
+		} );
+	} );
+}
+
+/**
  * Changes presence of a privacy protection for the given domain cart items.
  *
  * @param {Object} cart - cart as `CartValue` object
@@ -791,17 +818,31 @@ export function changePrivacyForDomains( cart, domainItems, changeFunction ) {
 	return flow.apply(
 		null,
 		domainItems.map( function( item ) {
+			if ( isDomainTransfer( item ) ) {
+				return changeFunction( domainTransferPrivacy( { domain: item.meta } ) );
+			}
 			return changeFunction( domainPrivacyProtection( { domain: item.meta } ) );
 		} )
 	);
 }
 
 export function addPrivacyToAllDomains( cart ) {
-	return changePrivacyForDomains( cart, getDomainRegistrationsWithoutPrivacy( cart ), add );
+	return changePrivacyForDomains(
+		cart,
+		[
+			...getDomainRegistrationsWithoutPrivacy( cart ),
+			...getDomainTransfersWithoutPrivacy( cart ),
+		],
+		add
+	);
 }
 
 export function removePrivacyFromAllDomains( cart ) {
-	return changePrivacyForDomains( cart, getDomainRegistrations( cart ), remove );
+	return changePrivacyForDomains(
+		cart,
+		[ ...getDomainRegistrations( cart ), ...getDomainTransfers( cart ) ],
+		remove
+	);
 }
 
 /**
@@ -812,16 +853,6 @@ export function removePrivacyFromAllDomains( cart ) {
  */
 export function isRenewal( cartItem ) {
 	return cartItem.extra && cartItem.extra.purchaseType === 'renewal';
-}
-
-/**
- * Determines whether a cart item is a transfer
- *
- * @param {Object} cartItem - `CartItemValue` object
- * @returns {boolean} true if item is a renewal
- */
-export function isTransfer( cartItem ) {
-	return cartItem.product_slug === domainProductSlugs.TRANSFER_IN;
 }
 
 /**
@@ -924,6 +955,7 @@ export default {
 	domainRedemption,
 	domainRegistration,
 	domainTransfer,
+	domainTransferPrivacy,
 	fillGoogleAppsRegistrationData,
 	findFreeTrial,
 	getAll,
@@ -934,6 +966,7 @@ export default {
 	getDomainRegistrationsWithoutPrivacy,
 	getDomainRegistrationTld,
 	getDomainTransfers,
+	getDomainTransfersWithoutPrivacy,
 	getGoogleApps,
 	getIncludedDomain,
 	getItemForPlan,
@@ -947,7 +980,6 @@ export default {
 	guidedTransferItem,
 	isDomainBeingUsedForPlan,
 	isNextDomainFree,
-	isTransfer,
 	hasDomainCredit,
 	hasDomainInCart,
 	hasDomainMapping,

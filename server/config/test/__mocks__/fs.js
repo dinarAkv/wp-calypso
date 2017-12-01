@@ -1,6 +1,8 @@
+/** @format */
 /**
  * External dependencies
  */
+
 import path from 'path';
 
 const fs = jest.genMockFromModule( 'fs' );
@@ -17,6 +19,19 @@ function setValidSecrets() {
 		} ),
 		'empty-secrets.json': toJSON( {
 			secret: 'fromempty',
+		} ),
+	};
+}
+
+function setEmptySecrets() {
+	mockFiles = {
+		'empty-secrets.json': toJSON( {
+			secret: 'fromempty',
+		} ),
+		'_shared.json': toJSON( {
+			features: {
+				'wpcom-user-bootstrap': true,
+			},
 		} ),
 	};
 }
@@ -54,6 +69,7 @@ function readFileSync( file ) {
 }
 
 fs.__setValidSecrets = setValidSecrets;
+fs.__setEmptySecrets = setEmptySecrets;
 fs.__setValidEnvFiles = setValidEnvFiles;
 fs.existsSync = existsSync;
 fs.readFileSync = readFileSync;

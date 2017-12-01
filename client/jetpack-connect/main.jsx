@@ -6,7 +6,7 @@ import React, { Component } from 'react';
 import PropTypes from 'prop-types';
 import { connect } from 'react-redux';
 import Gridicon from 'gridicons';
-import { flowRight, includes } from 'lodash';
+import { concat, flowRight, includes } from 'lodash';
 import { localize } from 'i18n-calypso';
 
 /**
@@ -14,15 +14,12 @@ import { localize } from 'i18n-calypso';
  */
 import Button from 'components/button';
 import Card from 'components/card';
+import { FLOW_TYPES } from 'state/jetpack-connect/constants';
 import LoggedOutFormLinks from 'components/logged-out-form/links';
 import LoggedOutFormLinkItem from 'components/logged-out-form/link-item';
 import JetpackConnectNotices from './jetpack-connect-notices';
 import SiteUrlInput from './site-url-input';
-import {
-	getGlobalSelectedPlan,
-	getConnectingSite,
-	getJetpackSiteByUrl,
-} from 'state/jetpack-connect/selectors';
+import { getConnectingSite, getJetpackSiteByUrl } from 'state/jetpack-connect/selectors';
 import { isRequestingSites } from 'state/sites/selectors';
 import JetpackInstallStep from './install-step';
 import versionCompare from 'lib/version-compare';
@@ -33,6 +30,7 @@ import FormattedHeader from 'components/formatted-header';
 import HelpButton from './help-button';
 import JetpackConnectHappychatButton from './happychat-button';
 import untrailingslashit from 'lib/route/untrailingslashit';
+import { retrievePlan } from './persistence-utils';
 import {
 	confirmJetpackInstallStatus,
 	dismissUrl,
@@ -52,7 +50,7 @@ class JetpackConnectMain extends Component {
 	static propTypes = {
 		locale: PropTypes.string,
 		path: PropTypes.string,
-		type: PropTypes.oneOf( [ 'install', 'pro', 'premium', 'personal', false ] ),
+		type: PropTypes.oneOf( concat( FLOW_TYPES, false ) ),
 		url: PropTypes.string,
 	};
 
@@ -255,7 +253,8 @@ class JetpackConnectMain extends Component {
 	handleOnClickTos = () => this.props.recordTracksEvent( 'calypso_jpc_tos_link_click' );
 
 	getTexts() {
-		const { type, selectedPlan, translate } = this.props;
+		const { type, translate } = this.props;
+		const selectedPlan = retrievePlan();
 
 		if (
 			type === 'pro' ||
@@ -316,12 +315,7 @@ class JetpackConnectMain extends Component {
 	}
 
 	isInstall() {
-		/*
-		 * FIXME: `return ! this.props.type` should be sufficient
-		 * I'm avoiding significantly changing this implementation
-		 * until propTypes have been around for a while.
-		 */
-		return includes( [ 'install', 'pro', 'premium', 'personal' ], this.props.type );
+		return includes( FLOW_TYPES, this.props.type );
 	}
 
 	getInstructionsData( status ) {
@@ -504,7 +498,6 @@ const connectComponent = connect(
 		jetpackConnectSite: getConnectingSite( state ),
 		getJetpackSiteByUrl: url => getJetpackSiteByUrl( state, url ),
 		isRequestingSites: isRequestingSites( state ),
-		selectedPlan: getGlobalSelectedPlan( state ),
 	} ),
 	{
 		confirmJetpackInstallStatus,

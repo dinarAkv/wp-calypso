@@ -9,7 +9,7 @@ import qs from 'qs';
 import { execSync } from 'child_process';
 import cookieParser from 'cookie-parser';
 import debugFactory from 'debug';
-import { get, pick, forEach, intersection } from 'lodash';
+import { get, forEach, intersection } from 'lodash';
 
 /**
  * Internal dependencies
@@ -18,11 +18,10 @@ import config from 'config';
 import sanitize from 'sanitize';
 import utils from 'bundler/utils';
 import sectionsModule from '../../client/sections';
-import { serverRouter, getCacheKey } from 'isomorphic-routing';
+import { serverRouter } from 'isomorphic-routing';
 import { serverRender, serverRenderError } from 'render';
-import stateCache from 'state-cache';
-import { createReduxStore, reducer } from 'state';
-import { DESERIALIZE, LOCALE_SET } from 'state/action-types';
+import { createReduxStore } from 'state';
+import { LOCALE_SET } from 'state/action-types';
 import { login } from 'lib/paths';
 import { logSectionResponseTime } from './analytics';
 
@@ -58,13 +57,6 @@ const prideLocations = [];
 
 const sections = sectionsModule.get();
 
-// TODO: Re-use (a modified version of) client/state/initial-state#getInitialServerState here
-function getInitialServerState( serializedServerState ) {
-	// Bootstrapped state from a server-render
-	const serverState = reducer( serializedServerState, { type: DESERIALIZE } );
-	return pick( serverState, Object.keys( serializedServerState ) );
-}
-
 const ASSETS_PATH = path.join( __dirname, '../', 'bundler', 'assets.json' );
 const getAssets = ( () => {
 	let assets;
@@ -87,8 +79,7 @@ function generateStaticUrls() {
 	const assets = getAssets();
 
 	forEach( assets, ( asset, name ) => {
-		urls[ name ] =
-			config( 'env' ) === 'development' ? asset.js : asset.js.replace( '.js', '.min.js' );
+		urls[ name ] = asset.js;
 	} );
 
 	return urls;
@@ -142,17 +133,10 @@ function getAcceptedLanguagesFromHeader( header ) {
 }
 
 function getDefaultContext( request ) {
-	let initialServerState = {};
 	const bodyClasses = [];
-	const cacheKey = getCacheKey( request );
 	const geoLocation = ( request.headers[ 'x-geoip-country-code' ] || '' ).toLowerCase();
 	const isDebug = calypsoEnv === 'development' || request.query.debug !== undefined;
 	let sectionCss;
-
-	if ( cacheKey ) {
-		const serializeCachedServerState = stateCache.get( cacheKey ) || {};
-		initialServerState = getInitialServerState( serializeCachedServerState );
-	}
 
 	// Note: The x-geoip-country-code header should *not* be considered 100% accurate.
 	// It should only be used for guestimating the visitor's location.
@@ -191,7 +175,7 @@ function getDefaultContext( request ) {
 		isFluidWidth: !! config.isEnabled( 'fluid-width' ),
 		abTestHelper: !! config.isEnabled( 'dev/test-helper' ),
 		devDocsURL: '/devdocs',
-		store: createReduxStore( initialServerState ),
+		store: createReduxStore( {} ),
 		shouldUsePreconnect: config.isEnabled( 'try/preconnect' ) && !! request.query.enablePreconnect,
 		shouldUsePreconnectGoogle:
 			config.isEnabled( 'try/preconnect' ) && !! request.query.enablePreconnectGoogle,
@@ -262,7 +246,7 @@ function setUpLoggedInRoute( req, res, next ) {
 		'X-Frame-Options': 'SAMEORIGIN',
 	} );
 
-	const context = getDefaultContext( req );
+	req.context = getDefaultContext( req );
 
 	if ( config.isEnabled( 'wpcom-user-bootstrap' ) ) {
 		const user = require( 'user-bootstrap' );
@@ -303,7 +287,7 @@ function setUpLoggedInRoute( req, res, next ) {
 						errorMessage = error.message;
 					}
 
-					console.log( 'API Error: ' + errorMessage );
+					console.error( 'API Error: ' + errorMessage );
 
 					next( error );
 				}
@@ -314,11 +298,11 @@ function setUpLoggedInRoute( req, res, next ) {
 			const end = new Date().getTime() - start;
 
 			debug( 'Rendering with bootstrapped user object. Fetched in %d ms', end );
-			context.user = data;
+			req.context.user = data;
 
 			if ( data.localeSlug ) {
-				context.lang = data.localeSlug;
-				context.store.dispatch( {
+				req.context.lang = data.localeSlug;
+				req.context.store.dispatch( {
 					type: LOCALE_SET,
 					localeSlug: data.localeSlug,
 				} );
@@ -329,7 +313,7 @@ function setUpLoggedInRoute( req, res, next ) {
 				if ( searchParam ) {
 					res.redirect(
 						'https://' +
-							context.lang +
+							req.context.lang +
 							'.search.wordpress.com/?q=' +
 							encodeURIComponent( searchParam )
 					);
@@ -349,12 +333,9 @@ function setUpLoggedInRoute( req, res, next ) {
 				}
 			}
 
-			req.context = context;
-
 			next();
 		} );
 	} else {
-		req.context = context;
 		next();
 	}
 }

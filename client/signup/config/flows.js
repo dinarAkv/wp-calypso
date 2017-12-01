@@ -10,7 +10,6 @@ import i18n from 'i18n-calypso';
 /**
  * Internal dependencies
  */
-import { abtest } from 'lib/abtest';
 import config from 'config';
 import stepConfig from './steps';
 import userFactory from 'lib/user';
@@ -248,6 +247,18 @@ const flows = {
 		description: 'Used by `get.blog` users that connect their site to WordPress.com',
 		lastModified: '2016-11-14',
 	},
+
+	'pressable-nux': {
+		steps: [ 'creds-permission', 'creds-confirm', 'creds-complete' ],
+		destination: () => {
+			return '/stats';
+		},
+		description: 'Allow new Pressable users to grant permission to server credentials',
+		lastModified: '2017-11-20',
+		disallowResume: true,
+		allowContinue: false,
+		hideFlowProgress: true,
+	},
 };
 
 if ( config.isEnabled( 'signup/atomic-store-flow' ) ) {
@@ -427,7 +438,7 @@ const Flows = {
 	 * @param {String} flowName The current flow
 	 * @param {String} stepName The step that is being completed right now
 	 */
-	preloadABTestVariationsForStep( flowName, stepName ) {
+	preloadABTestVariationsForStep() {
 		/**
 		 * In cases where the flow is being resumed, the flow must not be changed from what the user
 		 * has seen before.
@@ -443,15 +454,10 @@ const Flows = {
 		 * If there is need to test the first step in a flow,
 		 * the best way to do it is to check for:
 		 *
-		 * 	if ( '' === stepName ) { ... }
+		 * 	if ( 'main' === flowName && '' === stepName ) { ... }
 		 *
 		 * This will be fired at the beginning of the signup flow.
 		 */
-		if ( 'main' === flowName ) {
-			if ( '' === stepName ) {
-				abtest( 'signupSurveyStep' );
-			}
-		}
 	},
 
 	/**
@@ -468,11 +474,8 @@ const Flows = {
 	 */
 	getABTestFilteredFlow( flowName, flow ) {
 		// Only do this on the main flow
-		if ( 'main' === flowName ) {
-			if ( abtest( 'signupSurveyStep' ) === 'showSurveyStep' ) {
-				return Flows.insertStepIntoFlow( 'survey', flow );
-			}
-		}
+		// if ( 'main' === flowName ) {
+		// }
 
 		return flow;
 	},

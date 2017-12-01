@@ -1,12 +1,9 @@
 /** @format */
-
 /**
  * External dependencies
  */
-
 import React from 'react';
 import { connect } from 'react-redux';
-import { Set } from 'immutable';
 import {
 	get,
 	includes,
@@ -57,7 +54,12 @@ import { activateModule } from 'state/jetpack/modules/actions';
 import { isBusiness, isEnterprise, isJetpackBusiness } from 'lib/products-values';
 import { hasFeature } from 'state/sites/plans/selectors';
 import { getPlugins } from 'state/plugins/installed/selectors';
-import { FEATURE_ADVANCED_SEO, PLAN_BUSINESS } from 'lib/plans/constants';
+import {
+	FEATURE_ADVANCED_SEO,
+	FEATURE_SEO_PREVIEW_TOOLS,
+	PLAN_BUSINESS,
+	PLAN_JETPACK_BUSINESS,
+} from 'lib/plans/constants';
 import QueryJetpackModules from 'components/data/query-jetpack-modules';
 import QueryJetpackPlugins from 'components/data/query-jetpack-plugins';
 import QuerySiteSettings from 'components/data/query-site-settings';
@@ -94,7 +96,7 @@ export class SeoForm extends React.Component {
 		// from overwriting local stateful edits that
 		// are in progress and haven't yet been saved
 		// to the server
-		dirtyFields: Set(),
+		dirtyFields: new Set(),
 		invalidatedSiteObject: this.props.selectedSite,
 	};
 
@@ -128,7 +130,7 @@ export class SeoForm extends React.Component {
 					...stateForSite( nextSite ),
 					seoTitleFormats: nextProps.storedTitleFormats,
 					invalidatedSiteObject: nextSite,
-					dirtyFields: Set(),
+					dirtyFields: new Set(),
 				},
 				this.refreshCustomTitles
 			);
@@ -140,10 +142,13 @@ export class SeoForm extends React.Component {
 		};
 
 		if ( ! isFetchingSite ) {
+			const nextDirtyFields = new Set( dirtyFields );
+			nextDirtyFields.delete( 'seoTitleFormats' );
+
 			nextState = {
 				...nextState,
 				seoTitleFormats: nextProps.storedTitleFormats,
-				dirtyFields: dirtyFields.delete( 'seoTitleFormats' ),
+				dirtyFields: nextDirtyFields,
 			};
 		}
 
@@ -152,32 +157,33 @@ export class SeoForm extends React.Component {
 		}
 
 		// Don't update state for fields the user has edited
-		nextState = omit( nextState, dirtyFields.toArray() );
+		nextState = omit( nextState, Array.from( dirtyFields ) );
 
-		this.setState( {
-			...nextState,
-		} );
+		this.setState( nextState );
 	}
 
 	handleMetaChange = ( { target: { value: frontPageMetaDescription } } ) => {
-		const { dirtyFields } = this.state;
+		const dirtyFields = new Set( this.state.dirtyFields );
+		dirtyFields.add( 'frontPageMetaDescription' );
 
 		// Don't allow html tags in the input field
 		const hasHtmlTagError = anyHtmlTag.test( frontPageMetaDescription );
 
 		this.setState(
-			Object.assign( { hasHtmlTagError }, ! hasHtmlTagError && { frontPageMetaDescription }, {
-				dirtyFields: dirtyFields.add( 'frontPageMetaDescription' ),
-			} )
+			Object.assign(
+				{ dirtyFields, hasHtmlTagError },
+				! hasHtmlTagError && { frontPageMetaDescription }
+			)
 		);
 	};
 
 	updateTitleFormats = seoTitleFormats => {
-		const { dirtyFields } = this.state;
+		const dirtyFields = new Set( this.state.dirtyFields );
+		dirtyFields.add( 'seoTitleFormats' );
 
 		this.setState( {
 			seoTitleFormats,
-			dirtyFields: dirtyFields.add( 'seoTitleFormats' ),
+			dirtyFields,
 		} );
 	};
 
@@ -313,8 +319,8 @@ export class SeoForm extends React.Component {
 		const jetpackUpdateUrl = getJetpackPluginUrl( slug );
 
 		const nudgeTitle = siteIsJetpack
-			? translate( 'Enable SEO Tools features by upgrading to Jetpack Professional' )
-			: translate( 'Enable SEO Tools features by upgrading to the Business Plan' );
+			? translate( 'Enable SEO Tools by upgrading to Jetpack Professional' )
+			: translate( 'Enable SEO Tools by upgrading to the Business plan' );
 
 		const seoSubmitButton = (
 			<Button
@@ -360,7 +366,6 @@ export class SeoForm extends React.Component {
 							</NoticeAction>
 						</Notice>
 					) }
-
 				{ conflictedSeoPlugin && (
 					<Notice
 						status="is-warning"
@@ -375,7 +380,6 @@ export class SeoForm extends React.Component {
 						</NoticeAction>
 					</Notice>
 				) }
-
 				{ isJetpackUnsupported && (
 					<Notice
 						status="is-warning"
@@ -385,7 +389,6 @@ export class SeoForm extends React.Component {
 						<NoticeAction href={ jetpackUpdateUrl }>{ translate( 'Update Now' ) }</NoticeAction>
 					</Notice>
 				) }
-
 				{ siteIsJetpack &&
 					hasBusinessPlan( site.plan ) &&
 					isSeoToolsActive === false && (
@@ -398,18 +401,18 @@ export class SeoForm extends React.Component {
 						</Notice>
 					) }
 
-				{ ! this.props.hasAdvancedSEOFeature && (
-					<Banner
-						description={ translate(
-							'Adds tools to optimize your site for search engines and social media sharing.'
-						) }
-						event={ 'calypso_seo_settings_upgrade_nudge' }
-						feature={ FEATURE_ADVANCED_SEO }
-						plan={ PLAN_BUSINESS }
-						title={ nudgeTitle }
-					/>
-				) }
-
+				{ ! this.props.hasSeoPreviewFeature &&
+					! this.props.hasAdvancedSEOFeature && (
+						<Banner
+							description={ translate(
+								'Get tools to optimize your site for improved performance in search engine results.'
+							) }
+							event={ 'calypso_seo_settings_upgrade_nudge' }
+							feature={ siteIsJetpack ? FEATURE_SEO_PREVIEW_TOOLS : FEATURE_ADVANCED_SEO }
+							plan={ siteIsJetpack ? PLAN_JETPACK_BUSINESS : PLAN_BUSINESS }
+							title={ nudgeTitle }
+						/>
+					) }
 				<form onChange={ this.props.markChanged } className="seo-settings__seo-form">
 					{ showAdvancedSeo &&
 						! conflictedSeoPlugin && (
@@ -488,7 +491,6 @@ export class SeoForm extends React.Component {
 							</div>
 						) }
 				</form>
-
 				<WebPreview
 					showPreview={ showPreview }
 					onClose={ this.hidePreview }
@@ -528,6 +530,7 @@ const mapStateToProps = ( state, ownProps ) => {
 		isSitePrivate: isPrivateSite( state, siteId ),
 		activePlugins: getPlugins( state, [ siteId ], 'active' ),
 		hasAdvancedSEOFeature: hasFeature( state, siteId, FEATURE_ADVANCED_SEO ),
+		hasSeoPreviewFeature: hasFeature( state, siteId, FEATURE_SEO_PREVIEW_TOOLS ),
 		isSaveSuccess: isSiteSettingsSaveSuccessful( state, siteId ),
 		saveError: getSiteSettingsSaveError( state, siteId ),
 	};

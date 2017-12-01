@@ -1,3 +1,4 @@
+/** @format */
 var superagent = require( 'superagent' ),
 	debug = require( 'debug' )( 'calypso:bootstrap' ),
 	crypto = require( 'crypto' );
@@ -11,17 +12,18 @@ var config = require( 'config' ),
 	*/
 	url = 'https://public-api.wordpress.com/rest/v1/me?meta=flags';
 
-
 module.exports = function( authCookieValue, callback ) {
 	// create HTTP Request object
 	var req = superagent.get( url ),
-		hmac, hash;
+		hmac,
+		hash;
 
 	if ( authCookieValue ) {
 		authCookieValue = decodeURIComponent( authCookieValue );
 
 		if ( typeof API_KEY !== 'string' ) {
-			throw new Error( 'Unable to boostrap user because of invalid API key in secrets.json' );
+			callback( new Error( 'Unable to boostrap user because of invalid API key in secrets.json' ) );
+			return;
 		}
 
 		hmac = crypto.createHmac( 'md5', API_KEY );

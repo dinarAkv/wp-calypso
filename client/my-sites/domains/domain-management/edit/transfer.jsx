@@ -22,8 +22,15 @@ import support from 'lib/url/support';
 import { restartInboundTransfer } from 'lib/domains';
 import { fetchDomains } from 'lib/upgrades/actions';
 import { errorNotice, successNotice } from 'state/notices/actions';
+import VerticalNav from 'components/vertical-nav';
+import VerticalNavItem from 'components/vertical-nav/item';
+import { cancelPurchase as cancelPurchaseLink } from 'me/purchases/paths';
 
 class Transfer extends React.PureComponent {
+	state = {
+		isRestartingTransfer: false,
+	};
+
 	render() {
 		const { domain } = this.props;
 		let content = this.getDomainDetailsCard();
@@ -32,10 +39,17 @@ class Transfer extends React.PureComponent {
 			content = this.getCancelledContent();
 		}
 
+		const path = cancelPurchaseLink( this.props.selectedSite.slug, domain.subscriptionId );
+
 		return (
 			<div className="edit__domain-details-card">
 				<Header domain={ domain } />
 				{ content }
+				<VerticalNav>
+					<VerticalNavItem path={ path }>
+						{ this.props.translate( 'Cancel Transfer' ) }
+					</VerticalNavItem>
+				</VerticalNav>
 			</div>
 		);
 	}
@@ -46,6 +60,7 @@ class Transfer extends React.PureComponent {
 
 	restartTransfer = () => {
 		const { domain, selectedSite, translate } = this.props;
+		this.toggleRestartState();
 
 		restartInboundTransfer( selectedSite.ID, domain.name, ( error, result ) => {
 			if ( result ) {
@@ -60,26 +75,33 @@ class Transfer extends React.PureComponent {
 						duration: 5000,
 					}
 				);
+				this.toggleRestartState();
 			}
 		} );
 	};
 
+	toggleRestartState() {
+		this.setState( { isRestartingTransfer: ! this.state.isRestartingTransfer } );
+	}
+
 	getCancelledContent() {
 		const { domain, translate } = this.props;
+		const { isRestartingTransfer } = this.state;
 
 		return (
 			<Card>
 				<div>
-					<p className="edit__transfer-text-fail">{ translate( 'Domain transfer failed' ) }</p>
+					<h2 className="edit__transfer-text-fail">{ translate( 'Domain transfer failed' ) }</h2>
 					<p>
 						{ translate(
-							'We were unable to verify the transfer of {{strong}}%(domain)s{{/strong}}. The domain ' +
-								'authorization code from you current registrar was not provided to initiate the transfer. ' +
-								'{{a}}Learn More{{/a}}.',
+							'We were unable to complete the transfer of {{strong}}%(domain)s{{/strong}}. It could be ' +
+								'a number of things that caused the transfer to fail like an invalid or missing authorization code, ' +
+								'the domain is still locked, or your current domain provider denied the transfer. ' +
+								'{{a}}Visit our support article{{/a}} for more detailed information about why it may have failed.',
 							{
 								components: {
 									strong: <strong />,
-									a: <a href={ '#' } />,
+									a: <a href={ support.INCOMING_DOMAIN_TRANSFER_STATUSES_FAILED } />,
 								},
 								args: { domain: domain.name },
 							}
@@ -87,10 +109,20 @@ class Transfer extends React.PureComponent {
 					</p>
 				</div>
 				<div>
-					<Button onClick={ this.restartTransfer }>
-						{ this.props.translate( 'Start Transfer Again' ) }
+					<Button
+						className="edit__transfer-button-fail"
+						onClick={ this.restartTransfer }
+						busy={ isRestartingTransfer }
+						disabled={ isRestartingTransfer }
+					>
+						{ isRestartingTransfer
+							? translate( 'Restarting Transfer…' )
+							: translate( 'Start Transfer Again' ) }
 					</Button>
-					<Button className="edit__transfer-button-margin" href={ support.CALYPSO_CONTACT }>
+					<Button
+						className="edit__transfer-button-fail edit__transfer-button-fail-margin"
+						href={ support.CALYPSO_CONTACT }
+					>
 						{ this.props.translate( 'Contact Support' ) }
 					</Button>
 				</div>

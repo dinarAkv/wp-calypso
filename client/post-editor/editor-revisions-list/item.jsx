@@ -28,6 +28,20 @@ class EditorRevisionsListItem extends PureComponent {
 		const authorName = get( revision, 'author.display_name' );
 		const added = get( revisionChanges, 'summary.added' );
 		const removed = get( revisionChanges, 'summary.removed' );
+		const titles = {
+			added:
+				added &&
+				translate( '%(changes)d word added', '%(changes)d words added', {
+					args: { changes: added },
+					count: added,
+				} ),
+			removed:
+				removed &&
+				translate( '%(changes)d word removed', '%(changes)d words removed', {
+					args: { changes: removed },
+					count: removed,
+				} ),
+		};
 
 		return (
 			<button
@@ -36,7 +50,7 @@ class EditorRevisionsListItem extends PureComponent {
 				type="button"
 			>
 				<span className="editor-revisions-list__date">
-					<TimeSince date={ revision.date } />
+					<TimeSince date={ revision.date } dateFormat="lll" />
 				</span>
 
 				{ authorName &&
@@ -46,10 +60,8 @@ class EditorRevisionsListItem extends PureComponent {
 					{ added > 0 && (
 						<span
 							className="editor-revisions-list__additions"
-							aria-label={ translate( '%(changes)d word added', '%(changes)d words added', {
-								args: { changes: added },
-								count: added,
-							} ) }
+							aria-label={ titles.added }
+							title={ titles.added }
 						>
 							<b>+</b>
 							{ added }
@@ -59,10 +71,8 @@ class EditorRevisionsListItem extends PureComponent {
 					{ removed > 0 && (
 						<span
 							className="editor-revisions-list__deletions"
-							aria-label={ translate( '%(changes)d word removed', '%(changes)d words removed', {
-								args: { changes: removed },
-								count: removed,
-							} ) }
+							aria-label={ titles.removed }
+							title={ titles.removed }
 						>
 							<b>-</b>
 							{ removed }
@@ -88,7 +98,7 @@ EditorRevisionsListItem.propTypes = {
 
 	// connected to state
 	isMultiUserSite: PropTypes.bool.isRequired,
-	revisionChanges: PropTypes.array.isRequired,
+	revisionChanges: PropTypes.object.isRequired,
 
 	// connected to dispatcher
 	selectPostRevision: PropTypes.func.isRequired,
